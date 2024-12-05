@@ -16,19 +16,27 @@ class YouTubeProvider(BaseSoundProvider):
             raise ValueError("Unable to retrieve playlist videos.")
         return playlist_info['entries']
 
-    def download_video(self, video_url: str, output_folder: str):
-        """Télécharge une vidéo spécifique."""
+    def download_video(self, video_url: str, output_folder: str) -> None:
+        """Télécharge une vidéo spécifique avec des métadonnées."""
         ydl_opts = {
             'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',
-            }],
+            'postprocessors': [
+                {
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '320',
+                },
+                {
+                    'key': 'FFmpegMetadata',  # Ajoute des métadonnées (artiste, titre, etc.)
+                },
+                {
+                    'key': 'EmbedThumbnail',  # Ajoute la miniature comme couverture
+                },
+            ],
+            'writethumbnail': True,  # Télécharge la miniature de la vidéo
             'outtmpl': f'{output_folder}/%(title)s.%(ext)s',
-            'quiet': True,  # Désactive la sortie
-            'no_warnings': True,  # Supprime les warnings
+            'quiet': True,
+            'force_overwrites': True
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
-
