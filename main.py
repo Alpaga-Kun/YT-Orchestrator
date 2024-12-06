@@ -8,6 +8,10 @@ from typing import List, Dict, Any
 import argparse
 import os
 from srcs import sound_providers
+from srcs.utils import Utils
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), './config', '.env'))
 
 class MusicDownloaderApp:
     def __init__(self) -> None:
@@ -16,6 +20,8 @@ class MusicDownloaderApp:
         self.lock = Lock()  # Mutex pour synchroniser l'accès aux téléchargements terminés
         self.completed: List[str] = []  # Liste des vidéos téléchargées avec succès
         self.errors: List[str] = []  # Liste des erreurs rencontrées
+        self.AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+        self.CONTAINER_NAME = os.getenv('CONTAINER_NAME')
 
     # =====================
     #  ARGUMENTS & SETUP
@@ -147,8 +153,10 @@ class MusicDownloaderApp:
 
     def run(self) -> None:
         """Point d'entrée principal de l'application."""
+        # Étape 1 : Parse des arguments
         args = self.parse_arguments()
 
+        # Étape 2 : Vérification du provider
         provider_name = args.provider
         if provider_name not in sound_providers:
             self.console.print(f"[bold red]Provider '{provider_name}' not found. Please check available providers.[/]")
@@ -157,18 +165,45 @@ class MusicDownloaderApp:
         provider_class = sound_providers[provider_name]
         provider = provider_class()
 
+        # Étape 3 : Initialisation de la classe Utils pour compression et sauvegarde
+        utils = Utils(self.AZURE_STORAGE_CONNECTION_STRING, self.CONTAINER_NAME)
+
+        # Étape 4 : Gestion des téléchargements (Playlists JSON ou URL unique)
         if args.playlists_json:
             playlists = self.load_playlists_from_json(args.playlists_json)
             for playlist in playlists:
                 title = playlist["title"]
                 url = playlist["url"]
+
+                # Création du dossier pour chaque playlist
                 playlist_folder = self.create_output_folder(args.output_folder, title)
                 self.download_playlist(url, playlist_folder, provider)
         elif args.playlist_url:
-            self.download_playlist(args.playlist_url, args.output_folder, provider)
+            # Télécharger une playlist unique
+            playlist_folder = self.create_output_folder(args.output_folder, "single_playlist")
+            self.download_playlist(args.playlist_url, playlist_folder, provider)
         else:
             self.console.print("[bold red]Error: You must provide either --playlist-url or --playlists-json[/]")
+            return
 
+        # Étape 5 : Compression des fichiers téléchargés
+        try:
+            self.console.print("[bold cyan]Compressing downloaded files...[/]")
+            zip_file = utils.compress_folder(args.output_folder, "compressed_music.zip")
+
+            # Étape 6 : Upload vers OneDrive (via Azure Blob Storage)
+            self.console.print("[bold cyan]Uploading compressed file to Azure Blob Storage...[/]")
+            link = utils.upload_to_blob_storage(zip_file)
+            self.console.print(f"[bold green]Uploaded successfully. Access it here: {link}[/]")
+
+            # Étape 7 : Nettoyage local des fichiers compressés
+            self.console.print("[bold yellow]Cleaning up local files...[/]")
+            utils.cleanup([zip_file])
+
+        except Exception as e:
+            self.console.print(f"[bold red]An error occurred during post-processing: {str(e)}[/]")
+
+        # Étape 8 : Affichage des erreurs de téléchargement, s'il y en a
         self.stock_errors()
 
 
