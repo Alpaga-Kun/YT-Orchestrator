@@ -210,3 +210,5 @@ class MusicDownloaderApp:
 if __name__ == "__main__":
     app = MusicDownloaderApp()
     app.run()
+
+# yt-dlp --cookies config/cookies.txt "https://youtube.com/playlist?list=PLhd9VAukhgUtxlCCOseHddhtjYJVO6G1X&si=AdEhReJwcebBw8tu"
