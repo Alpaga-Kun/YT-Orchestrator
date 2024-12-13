@@ -163,3 +163,4 @@ cython_debug/
 base
 run.sh
 setup.sh
+config/playlists.json
