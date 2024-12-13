@@ -17,4 +17,4 @@ rich==13.9.4
 six==1.17.0
 typing_extensions==4.12.2
 urllib3==2.2.3
-yt-dlp==2024.12.3
+yt-dlp==2024.12.6

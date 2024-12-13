@@ -27,16 +27,18 @@ class YouTubeProvider(BaseSoundProvider):
                     'preferredquality': '320',
                 },
                 {
-                    'key': 'FFmpegMetadata',  # Ajoute des métadonnées (artiste, titre, etc.)
+                    'key': 'FFmpegMetadata',  # Add metadata (artist, title, etc.)
                 },
                 {
-                    'key': 'EmbedThumbnail',  # Ajoute la miniature comme couverture
+                    'key': 'EmbedThumbnail',  # Add the thumbnail as cover art
                 },
             ],
-            'writethumbnail': True,  # Télécharge la miniature de la vidéo
+            'writethumbnail': True,  # Download the video thumbnail
             'outtmpl': f'{output_folder}/%(title)s.%(ext)s',
             'quiet': True,
-            'force_overwrites': True
+            'force_overwrites': True,
+            'cookiesfrombrowser': ('chrome',),
+            # 'verbose': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
