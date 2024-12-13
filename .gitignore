@@ -166,5 +166,6 @@ setup.sh
 config/playlists.json
 cache
 logs
+
 pytest
 pytest-cov
