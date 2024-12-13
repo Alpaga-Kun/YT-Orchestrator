@@ -2,14 +2,20 @@ import tempfile
 import browser_cookie3
 from ..base_soundprovider import BaseSoundProvider
 import yt_dlp
+import os
+import atexit
 
 class YouTubeProvider(BaseSoundProvider):
     provider_name = "youtube"
 
     def __init__(self):
-        # Crée un fichier temporaire pour stocker les cookies
-        self.cookies_tempfile = tempfile.NamedTemporaryFile(delete=False, suffix='.txt')
-        self._extract_cookies_to_tempfile()
+        try:
+            # Crée un fichier temporaire pour stocker les cookies
+            self.cookies_tempfile = tempfile.NamedTemporaryFile(delete=False, suffix='.txt')
+            self._extract_cookies_to_tempfile()
+            atexit.register(self.cleanup_tempfile)  # Assure le nettoyage du fichier temporaire
+        except Exception as e:
+            raise RuntimeError(f"Initialization failed: {e}")
 
     def _extract_cookies_to_tempfile(self):
         """Extrait les cookies du navigateur via browser_cookie3 et les écrit dans un fichier temporaire."""
@@ -17,24 +23,49 @@ class YouTubeProvider(BaseSoundProvider):
             cookies = browser_cookie3.chrome()  # Récupère les cookies de Chrome
             with open(self.cookies_tempfile.name, 'w') as f:
                 for cookie in cookies:
-                    f.write(f"{cookie.domain}\tTRUE\t{cookie.path}\tFALSE\t{cookie.expires}\t{cookie.name}\t{cookie.value}\n")
+                    f.write(
+                        f"{cookie.domain}\tTRUE\t{cookie.path}\tFALSE\t{cookie.expires}\t{cookie.name}\t{cookie.value}\n"
+                    )
         except Exception as e:
+            self.cleanup_tempfile()
             raise RuntimeError(f"Failed to extract cookies from browser: {e}")
+
+    def cleanup_tempfile(self):
+        """Supprime le fichier temporaire des cookies."""
+        try:
+            if os.path.exists(self.cookies_tempfile.name):
+                os.remove(self.cookies_tempfile.name)
+                print(f"Temporary cookie file {self.cookies_tempfile.name} removed.")
+        except Exception as e:
+            print(f"Error during cleanup of temporary file: {e}")
 
     def get_playlist_videos(self, playlist_url: str):
         """Récupère les vidéos d'une playlist en utilisant yt_dlp."""
+        if not playlist_url or not isinstance(playlist_url, str):
+            raise ValueError("Invalid playlist URL provided.")
         ydl_opts = {
             'quiet': True,
             'extract_flat': True,  # Pour ne pas télécharger les vidéos
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            playlist_info = ydl.extract_info(playlist_url, download=False)
-        if 'entries' not in playlist_info:
-            raise ValueError("Unable to retrieve playlist videos.")
-        return playlist_info['entries']
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                playlist_info = ydl.extract_info(playlist_url, download=False)
+            if not playlist_info or 'entries' not in playlist_info:
+                print(f"Error: No entries found in playlist {playlist_url}")
+                raise ValueError("Unable to retrieve playlist videos.")
+            return playlist_info.get('entries', [])
+        except yt_dlp.DownloadError as e:
+            raise RuntimeError(f"Error fetching playlist videos from {playlist_url}: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error during playlist retrieval: {e}")
 
     def download_video(self, video_url: str, output_folder: str) -> None:
         """Télécharge une vidéo spécifique avec des métadonnées."""
+        if not video_url or not isinstance(video_url, str):
+            raise ValueError("Invalid video URL provided.")
+        if not output_folder or not os.path.isdir(output_folder):
+            raise ValueError("Invalid output folder provided.")
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [
@@ -61,5 +92,12 @@ class YouTubeProvider(BaseSoundProvider):
             'cachedir': './cache',
             'no_warnings': True,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+        except yt_dlp.DownloadError as e:
+            raise RuntimeError(f"Failed to download video from {video_url}: {e}")
+        except FileNotFoundError as e:
+            raise RuntimeError(f"Output folder {output_folder} not found: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error during video download: {e}")
